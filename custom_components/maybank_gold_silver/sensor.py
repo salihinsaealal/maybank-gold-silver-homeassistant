@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 from aiohttp import ClientError
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
@@ -27,7 +27,6 @@ import voluptuous as vol
 from .const import (
     DEFAULT_SCAN_INTERVAL_MINUTES,
     DOMAIN,
-    PLATFORMS,
     SENSOR_TYPES,
     SOURCE_URL,
     USER_AGENT,
@@ -60,7 +59,8 @@ async def async_setup_platform(
     session = async_get_clientsession(hass)
 
     coordinator = MaybankMetalsCoordinator(hass, session, update_interval)
-    await coordinator.async_config_entry_first_refresh()
+    # Schedule initial refresh in background; don't block entity creation
+    hass.async_create_task(coordinator.async_config_entry_first_refresh())
 
     entities: list[SensorEntity] = []
     for key, desc in SENSOR_TYPES.items():
@@ -78,7 +78,8 @@ async def async_setup_entry(
     session = async_get_clientsession(hass)
     update_interval = timedelta(minutes=DEFAULT_SCAN_INTERVAL_MINUTES)
     coordinator = MaybankMetalsCoordinator(hass, session, update_interval)
-    await coordinator.async_config_entry_first_refresh()
+    # Schedule initial refresh in background; don't block entity creation
+    hass.async_create_task(coordinator.async_config_entry_first_refresh())
 
     entities: list[SensorEntity] = []
     for key, desc in SENSOR_TYPES.items():
