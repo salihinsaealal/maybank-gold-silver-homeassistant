@@ -101,33 +101,39 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         self._session = session
 
     async def _async_update_data(self) -> Dict[str, Any]:
+        _LOGGER.info("Maybank metals: starting fetch from source")
         headers = {
             "User-Agent": USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-MY,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
             "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
             "Referer": SOURCE_URL,
             "Origin": "https://www.maybank2u.com.my",
         }
         try:
-            async with self._session.get(SOURCE_URL, headers=headers, timeout=30, allow_redirects=True) as resp:
+            async with self._session.get(SOURCE_URL, headers=headers, timeout=60, allow_redirects=True) as resp:
                 if resp.status != 200:
                     raise UpdateFailed(f"HTTP {resp.status}")
                 # Enforce that the final URL is still the Maybank page we were told to use
                 final_url = resp.url
                 final_host = getattr(final_url, "host", "")
                 final_path = getattr(final_url, "path", "")
-                if final_host != "www.maybank2u.com.my" or "gold_and_silver.page" not in final_path:
+                # Allow any subdomain of maybank2u.com.my (e.g., www, origin variations) and flexible path
+                if not final_host.endswith("maybank2u.com.my") or "gold_and_silver" not in final_path:
                     raise UpdateFailed(
                         f"Unexpected redirect to {final_url}; refusing to parse as per user requirement"
                     )
-                _LOGGER.debug("Fetching Maybank metals from %s", final_url)
+                _LOGGER.info("Maybank metals: fetching from %s (status %s)", final_url, resp.status)
                 html = await resp.text()
+                _LOGGER.info("Maybank metals: fetched %d chars of HTML", len(html))
         except (asyncio.TimeoutError, ClientError) as err:
             raise UpdateFailed(f"Request error: {err}") from err
 
+        _LOGGER.info("Maybank metals: parsing HTML for prices")
         prices = _parse_prices(html)
         if not prices:
             # Log a small sanitized snippet to help troubleshoot without spamming logs
@@ -137,6 +143,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 snippet,
             )
             raise UpdateFailed("Failed to parse metals prices from Maybank page")
+        _LOGGER.info("Maybank metals: parsed prices %s", prices)
         return prices
 
 
