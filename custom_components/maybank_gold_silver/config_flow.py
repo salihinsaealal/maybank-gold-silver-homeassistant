@@ -5,7 +5,9 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
-DATA_SCHEMA = {}
+import voluptuous as vol
+
+DATA_SCHEMA = vol.Schema({})
 
 class MaybankGoldSilverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Maybank Gold & Silver."""
@@ -20,7 +22,7 @@ class MaybankGoldSilverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is None:
             # No settings required; just confirm add
-            return self.async_show_form(step_id="user", data_schema=None)
+            return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA)
 
         return self.async_create_entry(title="Maybank Gold & Silver", data={})
 

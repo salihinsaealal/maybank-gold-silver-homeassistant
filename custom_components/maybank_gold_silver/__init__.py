@@ -1,15 +1,7 @@
 """Maybank Gold & Silver integration (config entry based)."""
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.typing import ConfigType
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.config_entries import SOURCE_RELOAD
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers import entity_platform
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.config_entries import SOURCE_DISCOVERY
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.config_entries import SOURCE_SSDP
 
