@@ -101,7 +101,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         self._session = session
 
     async def _async_update_data(self) -> Dict[str, Any]:
-        _LOGGER.info("Maybank metals: starting fetch from source")
+        _LOGGER.warning("Maybank metals: starting fetch from source")
         headers = {
             "User-Agent": USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -117,6 +117,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         try:
             async with self._session.get(SOURCE_URL, headers=headers, timeout=60, allow_redirects=True) as resp:
                 if resp.status != 200:
+                    _LOGGER.warning("Maybank metals: HTTP status %s", resp.status)
                     raise UpdateFailed(f"HTTP {resp.status}")
                 # Enforce that the final URL is still the Maybank page we were told to use
                 final_url = resp.url
@@ -127,23 +128,27 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                     raise UpdateFailed(
                         f"Unexpected redirect to {final_url}; refusing to parse as per user requirement"
                     )
-                _LOGGER.info("Maybank metals: fetching from %s (status %s)", final_url, resp.status)
+                _LOGGER.warning("Maybank metals: fetching from %s (status %s)", final_url, resp.status)
                 html = await resp.text()
-                _LOGGER.info("Maybank metals: fetched %d chars of HTML", len(html))
+                _LOGGER.warning("Maybank metals: fetched %d chars of HTML", len(html))
         except (asyncio.TimeoutError, ClientError) as err:
+            self.hass.data.setdefault(DOMAIN, {})["last_error"] = f"request_error: {err}"
+            _LOGGER.warning("Maybank metals: request error %s", err)
             raise UpdateFailed(f"Request error: {err}") from err
 
-        _LOGGER.info("Maybank metals: parsing HTML for prices")
+        _LOGGER.warning("Maybank metals: parsing HTML for prices")
         prices = _parse_prices(html)
         if not prices:
             # Log a small sanitized snippet to help troubleshoot without spamming logs
             snippet = re.sub(r"\s+", " ", html)[:800]
+            self.hass.data.setdefault(DOMAIN, {})["last_error"] = "parse_failed"
             _LOGGER.warning(
                 "Maybank metals parsing returned no data. First 800 chars: %s",
                 snippet,
             )
             raise UpdateFailed("Failed to parse metals prices from Maybank page")
-        _LOGGER.info("Maybank metals: parsed prices %s", prices)
+        self.hass.data.setdefault(DOMAIN, {})["last_error"] = None
+        _LOGGER.warning("Maybank metals: parsed prices %s", prices)
         return prices
 
 
@@ -190,12 +195,24 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
         data = self.coordinator.data or {}
         metal_data = data.get(self._metal)
         if not metal_data:
-            return None
+            # still surface diagnostics if present
+            diag = self.hass.data.get(DOMAIN, {}).get("last_error")
+            return {
+                "source": SOURCE_URL,
+                "metal": self._metal,
+                "type": self._field,
+                "last_error": diag,
+            }
         return {
             "source": SOURCE_URL,
             "metal": self._metal,
             "type": self._field,
+            "last_error": self.hass.data.get(DOMAIN, {}).get("last_error"),
         }
+
+    async def async_added_to_hass(self) -> None:
+        # Trigger an immediate refresh attempt when entity is added
+        await self.coordinator.async_request_refresh()
 
 
 # ---------- Parsing helpers ----------
