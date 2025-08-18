@@ -113,6 +113,14 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             "Upgrade-Insecure-Requests": "1",
             "Referer": SOURCE_URL,
             "Origin": "https://www.maybank2u.com.my",
+            # Browser client hints and fetch metadata to better mimic a real browser
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-User": "?1",
+            "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", ";Not A Brand";v="99"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
         }
         try:
             async with self._session.get(SOURCE_URL, headers=headers, timeout=60, allow_redirects=True) as resp:
@@ -132,10 +140,51 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 html = await resp.text()
                 _LOGGER.warning("Maybank metals: fetched %d chars of HTML", len(html))
         except (asyncio.TimeoutError, ClientError) as err:
+            # Retry once with SSL verification disabled, only for the strict Maybank host
+            _LOGGER.warning("Maybank metals: request error on first attempt: %s", err)
             self.hass.data.setdefault(DOMAIN, {})["last_error"] = f"request_error: {err}"
-            _LOGGER.warning("Maybank metals: request error %s", err)
-            raise UpdateFailed(f"Request error: {err}") from err
-
+            try:
+                async with self._session.get(
+                    SOURCE_URL,
+                    headers=headers,
+                    timeout=60,
+                    allow_redirects=True,
+                    ssl=False,
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.warning("Maybank metals: HTTP status (ssl=False) %s", resp.status)
+                        raise UpdateFailed(f"HTTP {resp.status}")
+                    final_url = resp.url
+                    final_host = getattr(final_url, "host", "")
+                    final_path = getattr(final_url, "path", "")
+                    if not final_host.endswith("maybank2u.com.my") or "gold_and_silver" not in final_path:
+                        raise UpdateFailed(
+                            f"Unexpected redirect to {final_url} (ssl=False); refusing to parse as per user requirement"
+                        )
+                    _LOGGER.warning("Maybank metals: retry (ssl=False) from %s (status %s)", final_url, resp.status)
+                    html = await resp.text()
+                    _LOGGER.warning("Maybank metals: fetched %d chars of HTML (ssl=False)", len(html))
+            except Exception as err2:  # any failure in retry
+                msg = f"request_error_retry: {err2}"
+                self.hass.data.setdefault(DOMAIN, {})["last_error"] = msg
+                _LOGGER.warning("Maybank metals: request error on retry: %s", err2)
+                # Surface a persistent notification for visibility in UI
+                try:
+                    self.hass.async_create_task(
+                        self.hass.services.async_call(
+                            "persistent_notification",
+                            "create",
+                            {
+                                "title": "Maybank Gold & Silver",
+                                "message": f"Update failed: {msg}",
+                                "notification_id": "maybank_gold_silver_error",
+                            },
+                        )
+                    )
+                except Exception:
+                    pass
+                raise UpdateFailed(f"Request error: {err2}") from err2
+        
         _LOGGER.warning("Maybank metals: parsing HTML for prices")
         prices = _parse_prices(html)
         if not prices:
