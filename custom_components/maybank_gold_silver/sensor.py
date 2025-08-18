@@ -116,11 +116,14 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 if resp.status != 200:
                     raise UpdateFailed(f"HTTP {resp.status}")
                 # Enforce that the final URL is still the Maybank page we were told to use
-                final_url = str(resp.url)
-                if not final_url.startswith(SOURCE_URL):
+                final_url = resp.url
+                final_host = getattr(final_url, "host", "")
+                final_path = getattr(final_url, "path", "")
+                if final_host != "www.maybank2u.com.my" or "gold_and_silver.page" not in final_path:
                     raise UpdateFailed(
                         f"Unexpected redirect to {final_url}; refusing to parse as per user requirement"
                     )
+                _LOGGER.debug("Fetching Maybank metals from %s", final_url)
                 html = await resp.text()
         except (asyncio.TimeoutError, ClientError) as err:
             raise UpdateFailed(f"Request error: {err}") from err
