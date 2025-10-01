@@ -3,10 +3,10 @@
   "name": "Maybank Gold & Silver Prices",
   "documentation": "https://github.com/salihinsaealal/maybank-gold-silver-homeassistant",
   "issue_tracker": "https://github.com/salihinsaealal/maybank-gold-silver-homeassistant/issues",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "requirements": [],
   "codeowners": ["@salihinsaealal"],
   "iot_class": "cloud_polling",
-  "integration_type": "hub",
+  "integration_type": "device",
   "config_flow": true
 }

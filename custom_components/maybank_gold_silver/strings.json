@@ -1,0 +1,14 @@
+{
+  "title": "Maybank Gold & Silver",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Maybank Gold & Silver",
+        "description": "Create sensors for Gold/Silver Buy & Sell prices from Maybank Malaysia rates page."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only a single instance is allowed."
+    }
+  }
+}

@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from aiohttp import ClientError
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
@@ -49,7 +49,11 @@ async def async_setup_platform(
     add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up the Maybank metals sensors via YAML."""
+    """Set up the Maybank metals sensors via YAML (deprecated, use config flow)."""
+    _LOGGER.warning(
+        "Setting up Maybank Gold & Silver via YAML is deprecated. "
+        "Please use the UI configuration instead."
+    )
     scan_interval = config.get(CONF_SCAN_INTERVAL)
     if isinstance(scan_interval, int):
         update_interval = timedelta(seconds=scan_interval)
@@ -59,8 +63,8 @@ async def async_setup_platform(
     session = async_get_clientsession(hass)
 
     coordinator = MaybankMetalsCoordinator(hass, session, update_interval)
-    # Schedule initial refresh in background; don't block entity creation
-    hass.async_create_task(coordinator.async_config_entry_first_refresh())
+    # Perform initial refresh and wait for it
+    await coordinator.async_config_entry_first_refresh()
 
     entities: list[SensorEntity] = []
     for key, desc in SENSOR_TYPES.items():
@@ -75,11 +79,17 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up sensors from a config entry (UI)."""
-    session = async_get_clientsession(hass)
-    update_interval = timedelta(minutes=DEFAULT_SCAN_INTERVAL_MINUTES)
-    coordinator = MaybankMetalsCoordinator(hass, session, update_interval)
-    # Schedule initial refresh in background; don't block entity creation
-    hass.async_create_task(coordinator.async_config_entry_first_refresh())
+    # Reuse coordinator if already exists, otherwise create new one
+    if entry.entry_id not in hass.data.setdefault(DOMAIN, {}):
+        session = async_get_clientsession(hass)
+        update_interval = timedelta(minutes=DEFAULT_SCAN_INTERVAL_MINUTES)
+        coordinator = MaybankMetalsCoordinator(hass, session, update_interval)
+        # Perform initial refresh and wait for it
+        await coordinator.async_config_entry_first_refresh()
+        # Store coordinator for lifecycle management
+        hass.data[DOMAIN][entry.entry_id] = coordinator
+    else:
+        coordinator = hass.data[DOMAIN][entry.entry_id]
 
     entities: list[SensorEntity] = []
     for key, desc in SENSOR_TYPES.items():
@@ -101,7 +111,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         self._session = session
 
     async def _async_update_data(self) -> Dict[str, Any]:
-        _LOGGER.warning("Maybank metals: starting fetch from source")
+        _LOGGER.debug("Maybank metals: starting fetch from source")
         headers = {
             "User-Agent": USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -125,7 +135,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         try:
             async with self._session.get(SOURCE_URL, headers=headers, timeout=60, allow_redirects=True) as resp:
                 if resp.status != 200:
-                    _LOGGER.warning("Maybank metals: HTTP status %s", resp.status)
+                    _LOGGER.error("Maybank metals: HTTP status %s", resp.status)
                     raise UpdateFailed(f"HTTP {resp.status}")
                 # Enforce that the final URL is still the Maybank page we were told to use
                 final_url = resp.url
@@ -136,12 +146,12 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                     raise UpdateFailed(
                         f"Unexpected redirect to {final_url}; refusing to parse as per user requirement"
                     )
-                _LOGGER.warning("Maybank metals: fetching from %s (status %s)", final_url, resp.status)
+                _LOGGER.debug("Maybank metals: fetching from %s (status %s)", final_url, resp.status)
                 html = await resp.text()
-                _LOGGER.warning("Maybank metals: fetched %d chars of HTML", len(html))
+                _LOGGER.debug("Maybank metals: fetched %d chars of HTML", len(html))
         except (asyncio.TimeoutError, ClientError) as err:
             # Retry once with SSL verification disabled, only for the strict Maybank host
-            _LOGGER.warning("Maybank metals: request error on first attempt: %s", err)
+            _LOGGER.info("Maybank metals: request error on first attempt: %s, retrying with SSL disabled", err)
             self.hass.data.setdefault(DOMAIN, {})["last_error"] = f"request_error: {err}"
             try:
                 async with self._session.get(
@@ -152,7 +162,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                     ssl=False,
                 ) as resp:
                     if resp.status != 200:
-                        _LOGGER.warning("Maybank metals: HTTP status (ssl=False) %s", resp.status)
+                        _LOGGER.error("Maybank metals: HTTP status (ssl=False) %s", resp.status)
                         raise UpdateFailed(f"HTTP {resp.status}")
                     final_url = resp.url
                     final_host = getattr(final_url, "host", "")
@@ -161,13 +171,13 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                         raise UpdateFailed(
                             f"Unexpected redirect to {final_url} (ssl=False); refusing to parse as per user requirement"
                         )
-                    _LOGGER.warning("Maybank metals: retry (ssl=False) from %s (status %s)", final_url, resp.status)
+                    _LOGGER.debug("Maybank metals: retry (ssl=False) from %s (status %s)", final_url, resp.status)
                     html = await resp.text()
-                    _LOGGER.warning("Maybank metals: fetched %d chars of HTML (ssl=False)", len(html))
+                    _LOGGER.debug("Maybank metals: fetched %d chars of HTML (ssl=False)", len(html))
             except Exception as err2:  # any failure in retry
                 msg = f"request_error_retry: {err2}"
                 self.hass.data.setdefault(DOMAIN, {})["last_error"] = msg
-                _LOGGER.warning("Maybank metals: request error on retry: %s", err2)
+                _LOGGER.error("Maybank metals: request error on retry: %s", err2)
                 # Surface a persistent notification for visibility in UI
                 try:
                     self.hass.async_create_task(
@@ -185,19 +195,19 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                     pass
                 raise UpdateFailed(f"Request error: {err2}") from err2
         
-        _LOGGER.warning("Maybank metals: parsing HTML for prices")
+        _LOGGER.debug("Maybank metals: parsing HTML for prices")
         prices = _parse_prices(html)
         if not prices:
             # Log a small sanitized snippet to help troubleshoot without spamming logs
             snippet = re.sub(r"\s+", " ", html)[:800]
             self.hass.data.setdefault(DOMAIN, {})["last_error"] = "parse_failed"
-            _LOGGER.warning(
+            _LOGGER.error(
                 "Maybank metals parsing returned no data. First 800 chars: %s",
                 snippet,
             )
             raise UpdateFailed("Failed to parse metals prices from Maybank page")
         self.hass.data.setdefault(DOMAIN, {})["last_error"] = None
-        _LOGGER.warning("Maybank metals: parsed prices %s", prices)
+        _LOGGER.info("Maybank metals: successfully parsed prices %s", prices)
         return prices
 
 
@@ -215,6 +225,7 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
         self._attr_name = desc["name"]
         self._attr_icon = desc.get("icon")
         self._attr_native_unit_of_measurement = desc.get("unit", "MYR/g")
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = f"{DOMAIN}_{self._metal}_{self._field}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, "maybank_gold_silver")},
@@ -258,10 +269,6 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
             "type": self._field,
             "last_error": self.hass.data.get(DOMAIN, {}).get("last_error"),
         }
-
-    async def async_added_to_hass(self) -> None:
-        # Trigger an immediate refresh attempt when entity is added
-        await self.coordinator.async_request_refresh()
 
 
 # ---------- Parsing helpers ----------
