@@ -231,8 +231,9 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
             identifiers={(DOMAIN, "maybank_gold_silver")},
             name="Maybank Gold & Silver Prices",
             manufacturer="Maybank",
-            model="Gold & Silver",
+            model="Gold & Silver Price Feed",
             configuration_url=SOURCE_URL,
+            sw_version="1.0.0",
         )
         self._attr_suggested_display_precision = 2
 

@@ -4,8 +4,9 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN, PLATFORMS
+from .const import DOMAIN, PLATFORMS, SOURCE_URL
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -17,6 +18,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up from a config entry (UI)."""
     hass.data.setdefault(DOMAIN, {})
+    
+    # Register the device
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "maybank_gold_silver")},
+        name="Maybank Gold & Silver Prices",
+        manufacturer="Maybank",
+        model="Gold & Silver Price Feed",
+        sw_version="1.0.0",
+        configuration_url=SOURCE_URL,
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+    
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
