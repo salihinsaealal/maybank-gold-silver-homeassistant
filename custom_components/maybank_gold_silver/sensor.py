@@ -38,10 +38,10 @@ _LOGGER = logging.getLogger(__name__)
 DEVICE_INFO = DeviceInfo(
     identifiers={(DOMAIN, "maybank_gold_silver")},
     name="Maybank Gold & Silver Prices",
-    manufacturer="Maybank",
+    manufacturer="Cikgu Saleh",
     model="Gold & Silver Price Feed",
     configuration_url=SOURCE_URL,
-    sw_version="1.0.1",
+    sw_version="1.0.2",
 )
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
@@ -108,8 +108,10 @@ async def async_setup_entry(
 
     async_add_entities(entities)
     
+    _LOGGER.info("Maybank Gold & Silver: Entities added, starting background refresh")
     # Start background refresh without blocking setup
     await coordinator.async_refresh()
+    _LOGGER.info("Maybank Gold & Silver: Initial refresh completed")
 
 
 class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
@@ -149,7 +151,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         }
         
         try:
-            async with self._session.get(SOURCE_URL, headers=headers, timeout=15, allow_redirects=True) as resp:
+            async with self._session.get(SOURCE_URL, headers=headers, timeout=30, allow_redirects=True) as resp:
                 if resp.status != 200:
                     _LOGGER.error("Maybank metals: HTTP status %s", resp.status)
                     raise UpdateFailed(f"HTTP {resp.status}")
@@ -176,7 +178,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 async with self._session.get(
                     SOURCE_URL,
                     headers=headers,
-                    timeout=15,
+                    timeout=30,
                     allow_redirects=True,
                     ssl=False,
                 ) as resp:
@@ -267,21 +269,23 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
     def extra_state_attributes(self) -> Dict[str, Any] | None:
         data = self.coordinator.data or {}
         metal_data = data.get(self._metal)
-        if not metal_data:
-            # still surface diagnostics if present
-            diag = self.hass.data.get(DOMAIN, {}).get("last_error")
-            return {
-                "source": SOURCE_URL,
-                "metal": self._metal,
-                "type": self._field,
-                "last_error": diag,
-            }
-        return {
+        last_error = self.hass.data.get(DOMAIN, {}).get("last_error")
+        
+        base_attrs = {
             "source": SOURCE_URL,
             "metal": self._metal,
             "type": self._field,
-            "last_error": self.hass.data.get(DOMAIN, {}).get("last_error"),
+            "last_update_success": self.coordinator.last_update_success,
+            "last_error": last_error or "None",
         }
+        
+        if not metal_data:
+            # Add diagnostic info when unavailable
+            base_attrs["status"] = "unavailable"
+            base_attrs["help"] = "Check HA logs for 'maybank_gold_silver' errors"
+            return base_attrs
+            
+        return base_attrs
 
 
 # ---------- Parsing helpers ----------
