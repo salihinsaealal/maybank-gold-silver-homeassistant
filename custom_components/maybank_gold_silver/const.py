@@ -11,8 +11,8 @@ USER_AGENT = (
 DEFAULT_SCAN_INTERVAL_MINUTES = 30
 
 SENSOR_TYPES = {
-    # MIGA-i sensors - Use 'a' and 'b' prefix for proper alphabetical sorting
-    "miga_a_100g_buy": {
+    # MIGA-i sensors - Use numbers for proper sorting (1=≥100g, 2=<100g)
+    "miga_1_buy_100g_plus": {
         "name": "Buy (≥100g)",
         "icon": "mdi:gold",
         "metal": "miga_100g",
@@ -20,7 +20,7 @@ SENSOR_TYPES = {
         "unit": "MYR/g",
         "device": "miga",
     },
-    "miga_a_100g_sell": {
+    "miga_1_sell_100g_plus": {
         "name": "Sell (≥100g)",
         "icon": "mdi:gold",
         "metal": "miga_100g",
@@ -28,7 +28,7 @@ SENSOR_TYPES = {
         "unit": "MYR/g",
         "device": "miga",
     },
-    "miga_b_below100g_buy": {
+    "miga_2_buy_below_100g": {
         "name": "Buy (<100g)",
         "icon": "mdi:gold",
         "metal": "miga_below100g",
@@ -36,7 +36,7 @@ SENSOR_TYPES = {
         "unit": "MYR/g",
         "device": "miga",
     },
-    "miga_b_below100g_sell": {
+    "miga_2_sell_below_100g": {
         "name": "Sell (<100g)",
         "icon": "mdi:gold",
         "metal": "miga_below100g",
