@@ -41,7 +41,7 @@ DEVICE_INFO_REGULAR = DeviceInfo(
     manufacturer="Cikgu Saleh",
     model="Investment Account",
     configuration_url=SOURCE_URL,
-    sw_version="2.0.0",
+    sw_version="2.0.1",
 )
 
 # Shared device info for MIGA-i (Islamic)
@@ -51,7 +51,7 @@ DEVICE_INFO_MIGA = DeviceInfo(
     manufacturer="Cikgu Saleh",
     model="Islamic Gold Account",
     configuration_url=SOURCE_URL,
-    sw_version="2.0.0",
+    sw_version="2.0.1",
 )
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
@@ -386,54 +386,45 @@ def _parse_prices(html: str) -> Dict[str, Dict[str, float]]:
             except (ValueError, AttributeError):
                 pass
     
-    # Early exit if Strategy A worked
-    if prices["gold"].get("buy") and prices["gold"].get("sell"):
-        return prices
+    # Strategy B: Generic Selling/Buying pattern (only if Strategy A didn't find gold)
+    if not (prices["gold"].get("buy") and prices["gold"].get("sell")):
+        for m in _RE_SELLING_BUYING.finditer(html):
+            metal = m.group(1).lower()
+            selling = m.group(2)
+            buying = m.group(3)
+            if selling and buying:
+                try:
+                    prices[metal]["buy"] = _to_float(selling)
+                    prices[metal]["sell"] = _to_float(buying)
+                except (ValueError, AttributeError):
+                    pass
     
-    # Strategy B: Generic Selling/Buying pattern
-    for m in _RE_SELLING_BUYING.finditer(html):
-        metal = m.group(1).lower()
-        selling = m.group(2)
-        buying = m.group(3)
-        if selling and buying:
-            try:
-                prices[metal]["buy"] = _to_float(selling)
-                prices[metal]["sell"] = _to_float(buying)
-            except (ValueError, AttributeError):
-                pass
-    
-    # Early exit if Strategy B worked
-    if prices["gold"].get("buy") and prices["gold"].get("sell"):
-        return prices
-    
-    # Strategy C: Table cells pattern
-    for m in _RE_TABLE_CELLS.finditer(html):
-        metal = m.group(1).lower()
-        first = m.group(2)
-        second = m.group(3)
-        if first and second and "buy" not in prices[metal]:
-            try:
-                # Assume first is buy (selling), second is sell (buying)
-                prices[metal]["buy"] = _to_float(first)
-                prices[metal]["sell"] = _to_float(second)
-            except (ValueError, AttributeError):
-                pass
+    # Strategy C: Table cells pattern (only if still no gold data)
+    if not (prices["gold"].get("buy") and prices["gold"].get("sell")):
+        for m in _RE_TABLE_CELLS.finditer(html):
+            metal = m.group(1).lower()
+            first = m.group(2)
+            second = m.group(3)
+            if first and second and "buy" not in prices[metal]:
+                try:
+                    # Assume first is buy (selling), second is sell (buying)
+                    prices[metal]["buy"] = _to_float(first)
+                    prices[metal]["sell"] = _to_float(second)
+                except (ValueError, AttributeError):
+                    pass
 
-    # Early exit if Strategy C worked
-    if prices["gold"].get("buy") and prices["gold"].get("sell"):
-        return prices
-
-    # Strategy D: Fallback - two decimal numbers
-    for m in _RE_TWO_DECIMALS.finditer(html):
-        metal = m.group(1).lower()
-        first = m.group(2)
-        second = m.group(3)
-        if first and second and "buy" not in prices[metal]:
-            try:
-                prices[metal]["buy"] = _to_float(first)
-                prices[metal]["sell"] = _to_float(second)
-            except (ValueError, AttributeError):
-                pass
+    # Strategy D: Fallback - two decimal numbers (only if still no gold data)
+    if not (prices["gold"].get("buy") and prices["gold"].get("sell")):
+        for m in _RE_TWO_DECIMALS.finditer(html):
+            metal = m.group(1).lower()
+            first = m.group(2)
+            second = m.group(3)
+            if first and second and "buy" not in prices[metal]:
+                try:
+                    prices[metal]["buy"] = _to_float(first)
+                    prices[metal]["sell"] = _to_float(second)
+                except (ValueError, AttributeError):
+                    pass
 
     # Parse MIGA-i prices (Islamic Gold Account)
     match_100g = _RE_MIGA_100G.search(html)
