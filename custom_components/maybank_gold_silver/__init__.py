@@ -27,7 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name="Maybank Gold & Silver Prices",
         manufacturer="Maybank",
         model="Gold & Silver Price Feed",
-        sw_version="1.0.0",
+        sw_version="1.0.1",
         configuration_url=SOURCE_URL,
         entry_type=dr.DeviceEntryType.SERVICE,
     )

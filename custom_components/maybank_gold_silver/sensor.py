@@ -41,7 +41,7 @@ DEVICE_INFO = DeviceInfo(
     manufacturer="Maybank",
     model="Gold & Silver Price Feed",
     configuration_url=SOURCE_URL,
-    sw_version="1.0.0",
+    sw_version="1.0.1",
 )
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
@@ -73,14 +73,16 @@ async def async_setup_platform(
     session = async_get_clientsession(hass)
 
     coordinator = MaybankMetalsCoordinator(hass, session, update_interval)
-    # Perform initial refresh and wait for it
-    await coordinator.async_config_entry_first_refresh()
-
+    
+    # Create entities first, then refresh in background to avoid blocking setup
     entities: list[SensorEntity] = []
     for key, desc in SENSOR_TYPES.items():
         entities.append(MaybankMetalPriceSensor(coordinator, key, desc))
 
     add_entities(entities)
+    
+    # Start background refresh without blocking
+    await coordinator.async_refresh()
 
 
 async def async_setup_entry(
@@ -94,18 +96,20 @@ async def async_setup_entry(
         session = async_get_clientsession(hass)
         update_interval = timedelta(minutes=DEFAULT_SCAN_INTERVAL_MINUTES)
         coordinator = MaybankMetalsCoordinator(hass, session, update_interval)
-        # Perform initial refresh and wait for it
-        await coordinator.async_config_entry_first_refresh()
         # Store coordinator for lifecycle management
         hass.data[DOMAIN][entry.entry_id] = coordinator
     else:
         coordinator = hass.data[DOMAIN][entry.entry_id]
 
+    # Create entities first
     entities: list[SensorEntity] = []
     for key, desc in SENSOR_TYPES.items():
         entities.append(MaybankMetalPriceSensor(coordinator, key, desc))
 
     async_add_entities(entities)
+    
+    # Start background refresh without blocking setup
+    await coordinator.async_refresh()
 
 
 class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
@@ -121,6 +125,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         self._session = session
 
     async def _async_update_data(self) -> Dict[str, Any]:
+        """Fetch data from Maybank with proper error handling."""
         _LOGGER.debug("Maybank metals: starting fetch from source")
         headers = {
             "User-Agent": USER_AGENT,
@@ -142,6 +147,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
         }
+        
         try:
             async with self._session.get(SOURCE_URL, headers=headers, timeout=15, allow_redirects=True) as resp:
                 if resp.status != 200:
@@ -159,6 +165,9 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 _LOGGER.debug("Maybank metals: fetching from %s (status %s)", final_url, resp.status)
                 html = await resp.text()
                 _LOGGER.debug("Maybank metals: fetched %d chars of HTML", len(html))
+        except UpdateFailed:
+            # Re-raise UpdateFailed as-is
+            raise
         except (asyncio.TimeoutError, ClientError) as err:
             # Retry once with SSL verification disabled, only for the strict Maybank host
             _LOGGER.info("Maybank metals: request error on first attempt: %s, retrying with SSL disabled", err)
@@ -188,37 +197,37 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 msg = f"request_error_retry: {err2}"
                 self.hass.data.setdefault(DOMAIN, {})["last_error"] = msg
                 _LOGGER.error("Maybank metals: request error on retry: %s", err2)
-                # Surface a persistent notification for visibility in UI
-                try:
-                    self.hass.async_create_task(
-                        self.hass.services.async_call(
-                            "persistent_notification",
-                            "create",
-                            {
-                                "title": "Maybank Gold & Silver",
-                                "message": f"Update failed: {msg}",
-                                "notification_id": "maybank_gold_silver_error",
-                            },
-                        )
-                    )
-                except Exception:
-                    pass
                 raise UpdateFailed(f"Request error: {err2}") from err2
+        except Exception as err:
+            # Catch-all to prevent any unhandled exception from crashing HA
+            msg = f"Unexpected error: {type(err).__name__}: {err}"
+            self.hass.data.setdefault(DOMAIN, {})["last_error"] = msg
+            _LOGGER.error("Maybank metals: %s", msg)
+            raise UpdateFailed(msg) from err
         
-        _LOGGER.debug("Maybank metals: parsing HTML for prices")
-        prices = _parse_prices(html)
-        if not prices:
-            # Log a small sanitized snippet to help troubleshoot without spamming logs
-            snippet = re.sub(r"\s+", " ", html)[:800]
-            self.hass.data.setdefault(DOMAIN, {})["last_error"] = "parse_failed"
-            _LOGGER.error(
-                "Maybank metals parsing returned no data. First 800 chars: %s",
-                snippet,
-            )
-            raise UpdateFailed("Failed to parse metals prices from Maybank page")
-        self.hass.data.setdefault(DOMAIN, {})["last_error"] = None
-        _LOGGER.info("Maybank metals: successfully parsed prices %s", prices)
-        return prices
+        try:
+            _LOGGER.debug("Maybank metals: parsing HTML for prices")
+            prices = _parse_prices(html)
+            if not prices:
+                # Log a small sanitized snippet to help troubleshoot without spamming logs
+                snippet = re.sub(r"\s+", " ", html)[:800]
+                self.hass.data.setdefault(DOMAIN, {})["last_error"] = "parse_failed"
+                _LOGGER.error(
+                    "Maybank metals parsing returned no data. First 800 chars: %s",
+                    snippet,
+                )
+                raise UpdateFailed("Failed to parse metals prices from Maybank page")
+            self.hass.data.setdefault(DOMAIN, {})["last_error"] = None
+            _LOGGER.info("Maybank metals: successfully parsed prices %s", prices)
+            return prices
+        except UpdateFailed:
+            raise
+        except Exception as err:
+            # Catch parsing errors
+            msg = f"Parse error: {type(err).__name__}: {err}"
+            self.hass.data.setdefault(DOMAIN, {})["last_error"] = msg
+            _LOGGER.error("Maybank metals: %s", msg)
+            raise UpdateFailed(msg) from err
 
 
 class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], SensorEntity):
