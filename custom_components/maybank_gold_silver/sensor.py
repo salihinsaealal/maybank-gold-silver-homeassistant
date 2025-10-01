@@ -34,6 +34,16 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Shared device info to avoid recreating for each entity
+DEVICE_INFO = DeviceInfo(
+    identifiers={(DOMAIN, "maybank_gold_silver")},
+    name="Maybank Gold & Silver Prices",
+    manufacturer="Maybank",
+    model="Gold & Silver Price Feed",
+    configuration_url=SOURCE_URL,
+    sw_version="1.0.0",
+)
+
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     {
         vol.Optional(
@@ -133,7 +143,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             "sec-ch-ua-platform": '"Windows"',
         }
         try:
-            async with self._session.get(SOURCE_URL, headers=headers, timeout=60, allow_redirects=True) as resp:
+            async with self._session.get(SOURCE_URL, headers=headers, timeout=15, allow_redirects=True) as resp:
                 if resp.status != 200:
                     _LOGGER.error("Maybank metals: HTTP status %s", resp.status)
                     raise UpdateFailed(f"HTTP {resp.status}")
@@ -157,7 +167,7 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 async with self._session.get(
                     SOURCE_URL,
                     headers=headers,
-                    timeout=60,
+                    timeout=15,
                     allow_redirects=True,
                     ssl=False,
                 ) as resp:
@@ -227,14 +237,7 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
         self._attr_native_unit_of_measurement = desc.get("unit", "MYR/g")
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = f"{DOMAIN}_{self._metal}_{self._field}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "maybank_gold_silver")},
-            name="Maybank Gold & Silver Prices",
-            manufacturer="Maybank",
-            model="Gold & Silver Price Feed",
-            configuration_url=SOURCE_URL,
-            sw_version="1.0.0",
-        )
+        self._attr_device_info = DEVICE_INFO
         self._attr_suggested_display_precision = 2
 
     @property
@@ -274,24 +277,23 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
 
 # ---------- Parsing helpers ----------
 
-# Normalize whitespace to make regex simpler across minified or formatted HTML
-def _normalize_html(html: str) -> str:
-    return re.sub(r"\s+", " ", html)
-
-# Several regex strategies to make parsing resilient to minor site structure changes.
-# Strategy A: Explicit Buy/Sell headings near the metal name
+# Optimized regex patterns to avoid catastrophic backtracking
+# Strategy A: Simple pattern for Buy/Sell with limited lookahead
 _RE_BUY_SELL_ROW = re.compile(
-    r"(?is)\b(Gold|Silver)\b[^<]*?(?:</?\w+[^>]*>[^<]*)*?\bBuy\b[^\d]*(\d[\d.,]*)(?:[^<]*?(?:</?\w+[^>]*>[^<]*)*?)\bSell\b[^\d]*(\d[\d.,]*)"
+    r"\b(Gold|Silver)\b[^<]{0,200}?\bBuy\b[^\d]{0,50}(\d[\d.,]{0,10})[^<]{0,200}?\bSell\b[^\d]{0,50}(\d[\d.,]{0,10})",
+    re.IGNORECASE
 )
 
-# Strategy B: Table row where two numbers follow the metal label; often presented as RM/g
+# Strategy B: Two numbers after metal label with limited search window
 _RE_METAL_TWO_NUMBERS = re.compile(
-    r"(?is)\b(Gold|Silver)\b[^\d]*(\d[\d.,]*)[^\d]+(\d[\d.,]*)"
+    r"\b(Gold|Silver)\b[^\d]{0,100}(\d[\d.,]{1,10})[^\d]{1,100}(\d[\d.,]{1,10})",
+    re.IGNORECASE
 )
 
-# Strategy C: Include currency label RM explicitly if present
+# Strategy C: With currency marker - simplified
 _RE_WITH_CURRENCY = re.compile(
-    r"(?is)\b(Gold|Silver)\b.*?(?:RM|MYR)\s*(\d[\d.,]*)[^\d]+(?:RM|MYR)\s*(\d[\d.,]*)"
+    r"\b(Gold|Silver)\b.{0,200}?(?:RM|MYR)\s*(\d[\d.,]{1,10})[^\d]{1,100}(?:RM|MYR)\s*(\d[\d.,]{1,10})",
+    re.IGNORECASE
 )
 
 
@@ -308,44 +310,44 @@ def _parse_prices(html: str) -> Dict[str, Dict[str, float]]:
         'silver': {'buy': 2.9, 'sell': 3.0}
     }
     """
-    html_n = _normalize_html(html)
+    # Normalize whitespace inline - more efficient than full HTML copy
+    html_normalized = re.sub(r"\s+", " ", html)
     prices: Dict[str, Dict[str, float]] = {"gold": {}, "silver": {}}
 
-    # Strategy A: Metal with explicit Buy then Sell labels
-    for m in _RE_BUY_SELL_ROW.finditer(html_n):
-        metal = m.group(1).lower()
-        buy_val = m.group(2)
-        sell_val = m.group(3)
-        if buy_val:
-            prices[metal]["buy"] = _to_float(buy_val)
-        if sell_val:
-            prices[metal]["sell"] = _to_float(sell_val)
+    # Try Strategy A first (most reliable)
+    match = _RE_BUY_SELL_ROW.search(html_normalized)
+    if match:
+        for m in _RE_BUY_SELL_ROW.finditer(html_normalized):
+            metal = m.group(1).lower()
+            buy_val = m.group(2)
+            sell_val = m.group(3)
+            if buy_val and sell_val:
+                prices[metal]["buy"] = _to_float(buy_val)
+                prices[metal]["sell"] = _to_float(sell_val)
+    
+    # Only try Strategy B if Strategy A didn't find complete data
+    if not (prices["gold"].get("buy") and prices["gold"].get("sell")):
+        for m in _RE_METAL_TWO_NUMBERS.finditer(html_normalized):
+            metal = m.group(1).lower()
+            first = m.group(2)
+            second = m.group(3)
+            if first and second and "buy" not in prices[metal]:
+                prices[metal]["buy"] = _to_float(first)
+                prices[metal]["sell"] = _to_float(second)
 
-    # Strategy B: Two numbers after metal label (assume first=buy, second=sell)
-    for m in _RE_METAL_TWO_NUMBERS.finditer(html_n):
-        metal = m.group(1).lower()
-        first = m.group(2)
-        second = m.group(3)
-        if first and "buy" not in prices[metal]:
-            prices[metal]["buy"] = _to_float(first)
-        if second and "sell" not in prices[metal]:
-            prices[metal]["sell"] = _to_float(second)
+    # Only try Strategy C if still no complete data
+    if not (prices["gold"].get("buy") and prices["gold"].get("sell")):
+        for m in _RE_WITH_CURRENCY.finditer(html_normalized):
+            metal = m.group(1).lower()
+            first = m.group(2)
+            second = m.group(3)
+            if first and second:
+                prices[metal]["buy"] = prices[metal].get("buy") or _to_float(first)
+                prices[metal]["sell"] = prices[metal].get("sell") or _to_float(second)
 
-    # Strategy C: With currency marker
-    for m in _RE_WITH_CURRENCY.finditer(html_n):
-        metal = m.group(1).lower()
-        first = m.group(2)
-        second = m.group(3)
-        prices.setdefault(metal, {})
-        if first:
-            prices[metal]["buy"] = prices[metal].get("buy") or _to_float(first)
-        if second:
-            prices[metal]["sell"] = prices[metal].get("sell") or _to_float(second)
-
-    # Validate
+    # Validate and clean up
     for metal in list(prices.keys()):
         if not prices[metal].get("buy") or not prices[metal].get("sell"):
-            # remove incomplete entries
             prices.pop(metal, None)
 
     return prices
