@@ -41,7 +41,7 @@ DEVICE_INFO_REGULAR = DeviceInfo(
     manufacturer="Cikgu Saleh",
     model="Investment Account",
     configuration_url=SOURCE_URL,
-    sw_version="2.0.1",
+    sw_version="2.0.2",
 )
 
 # Shared device info for MIGA-i (Islamic)
@@ -51,7 +51,7 @@ DEVICE_INFO_MIGA = DeviceInfo(
     manufacturer="Cikgu Saleh",
     model="Islamic Gold Account",
     configuration_url=SOURCE_URL,
-    sw_version="2.0.1",
+    sw_version="2.0.2",
 )
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
