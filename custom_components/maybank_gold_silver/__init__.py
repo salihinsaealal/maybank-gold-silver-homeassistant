@@ -29,7 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name="Maybank Islamic Gold (MIGA-i)",
         manufacturer="Cikgu Saleh",
         model="Islamic Gold Account",
-        sw_version="2.0.2",
+        sw_version="2.0.3",
         configuration_url=SOURCE_URL,
         entry_type=dr.DeviceEntryType.SERVICE,
     )
@@ -41,7 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name="Maybank Gold & Silver",
         manufacturer="Cikgu Saleh",
         model="Investment Account",
-        sw_version="2.0.2",
+        sw_version="2.0.3",
         configuration_url=SOURCE_URL,
         entry_type=dr.DeviceEntryType.SERVICE,
     )
