@@ -208,16 +208,21 @@ class MaybankMetalsCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             raise UpdateFailed(msg) from err
         
         try:
-            _LOGGER.debug("Maybank metals: parsing HTML for prices")
+            _LOGGER.debug("Maybank metals: parsing HTML for prices (length: %d)", len(html))
             prices = _parse_prices(html)
             if not prices:
                 # Log a small sanitized snippet to help troubleshoot without spamming logs
-                snippet = re.sub(r"\s+", " ", html)[:800]
+                snippet = re.sub(r"\s+", " ", html)[:1000]
                 self.hass.data.setdefault(DOMAIN, {})["last_error"] = "parse_failed"
                 _LOGGER.error(
-                    "Maybank metals parsing returned no data. First 800 chars: %s",
+                    "Maybank metals parsing returned no data. First 1000 chars: %s",
                     snippet,
                 )
+                # Also log if we can find gold/silver keywords
+                if 'gold' in html.lower():
+                    idx = html.lower().find('gold')
+                    context = html[max(0, idx-100):idx+300]
+                    _LOGGER.error("Found 'gold' at position %d, context: %s", idx, context[:400])
                 raise UpdateFailed("Failed to parse metals prices from Maybank page")
             self.hass.data.setdefault(DOMAIN, {})["last_error"] = None
             _LOGGER.info("Maybank metals: successfully parsed prices %s", prices)
@@ -293,20 +298,26 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
 # Optimized regex patterns to avoid catastrophic backtracking
 # Strategy A: Simple pattern for Buy/Sell with limited lookahead
 _RE_BUY_SELL_ROW = re.compile(
-    r"\b(Gold|Silver)\b[^<]{0,200}?\bBuy\b[^\d]{0,50}(\d[\d.,]{0,10})[^<]{0,200}?\bSell\b[^\d]{0,50}(\d[\d.,]{0,10})",
-    re.IGNORECASE
+    r"\b(Gold|Silver)\b.{0,500}?\bBuy\b.{0,100}?(\d+\.\d{2}).{0,500}?\bSell\b.{0,100}?(\d+\.\d{2})",
+    re.IGNORECASE | re.DOTALL
 )
 
-# Strategy B: Two numbers after metal label with limited search window
+# Strategy B: Two numbers after metal label with limited search window  
 _RE_METAL_TWO_NUMBERS = re.compile(
-    r"\b(Gold|Silver)\b[^\d]{0,100}(\d[\d.,]{1,10})[^\d]{1,100}(\d[\d.,]{1,10})",
-    re.IGNORECASE
+    r"\b(Gold|Silver)\b.{0,200}?(\d+\.\d{2}).{1,200}?(\d+\.\d{2})",
+    re.IGNORECASE | re.DOTALL
 )
 
 # Strategy C: With currency marker - simplified
 _RE_WITH_CURRENCY = re.compile(
-    r"\b(Gold|Silver)\b.{0,200}?(?:RM|MYR)\s*(\d[\d.,]{1,10})[^\d]{1,100}(?:RM|MYR)\s*(\d[\d.,]{1,10})",
-    re.IGNORECASE
+    r"\b(Gold|Silver)\b.{0,300}?(?:RM|MYR)\s*(\d+\.\d{2}).{1,300}?(?:RM|MYR)\s*(\d+\.\d{2})",
+    re.IGNORECASE | re.DOTALL
+)
+
+# Strategy D: Table-based pattern (common in bank websites)
+_RE_TABLE_PATTERN = re.compile(
+    r"<tr[^>]*>.*?\b(Gold|Silver)\b.*?(\d+\.\d{2}).*?(\d+\.\d{2}).*?</tr>",
+    re.IGNORECASE | re.DOTALL
 )
 
 
@@ -323,40 +334,70 @@ def _parse_prices(html: str) -> Dict[str, Dict[str, float]]:
         'silver': {'buy': 2.9, 'sell': 3.0}
     }
     """
-    # Normalize whitespace inline - more efficient than full HTML copy
-    html_normalized = re.sub(r"\s+", " ", html)
     prices: Dict[str, Dict[str, float]] = {"gold": {}, "silver": {}}
 
-    # Try Strategy A first (most reliable)
-    match = _RE_BUY_SELL_ROW.search(html_normalized)
-    if match:
-        for m in _RE_BUY_SELL_ROW.finditer(html_normalized):
-            metal = m.group(1).lower()
-            buy_val = m.group(2)
-            sell_val = m.group(3)
-            if buy_val and sell_val:
+    # Try Strategy D first (table-based - most common for bank websites)
+    for m in _RE_TABLE_PATTERN.finditer(html):
+        metal = m.group(1).lower()
+        buy_val = m.group(2)
+        sell_val = m.group(3)
+        if buy_val and sell_val:
+            try:
                 prices[metal]["buy"] = _to_float(buy_val)
                 prices[metal]["sell"] = _to_float(sell_val)
+            except (ValueError, AttributeError):
+                pass
     
-    # Only try Strategy B if Strategy A didn't find complete data
-    if not (prices["gold"].get("buy") and prices["gold"].get("sell")):
-        for m in _RE_METAL_TWO_NUMBERS.finditer(html_normalized):
-            metal = m.group(1).lower()
-            first = m.group(2)
-            second = m.group(3)
-            if first and second and "buy" not in prices[metal]:
+    # If table pattern worked, return early
+    if prices["gold"].get("buy") and prices["gold"].get("sell"):
+        return prices
+    
+    # Normalize whitespace for other strategies
+    html_normalized = re.sub(r"\s+", " ", html)
+
+    # Try Strategy A (Buy/Sell labels)
+    for m in _RE_BUY_SELL_ROW.finditer(html_normalized):
+        metal = m.group(1).lower()
+        buy_val = m.group(2)
+        sell_val = m.group(3)
+        if buy_val and sell_val:
+            try:
+                prices[metal]["buy"] = _to_float(buy_val)
+                prices[metal]["sell"] = _to_float(sell_val)
+            except (ValueError, AttributeError):
+                pass
+    
+    # Early exit if we have gold data
+    if prices["gold"].get("buy") and prices["gold"].get("sell"):
+        return prices
+    
+    # Try Strategy B (two numbers after metal)
+    for m in _RE_METAL_TWO_NUMBERS.finditer(html_normalized):
+        metal = m.group(1).lower()
+        first = m.group(2)
+        second = m.group(3)
+        if first and second and "buy" not in prices[metal]:
+            try:
                 prices[metal]["buy"] = _to_float(first)
                 prices[metal]["sell"] = _to_float(second)
+            except (ValueError, AttributeError):
+                pass
 
-    # Only try Strategy C if still no complete data
-    if not (prices["gold"].get("buy") and prices["gold"].get("sell")):
-        for m in _RE_WITH_CURRENCY.finditer(html_normalized):
-            metal = m.group(1).lower()
-            first = m.group(2)
-            second = m.group(3)
-            if first and second:
+    # Early exit if we have gold data
+    if prices["gold"].get("buy") and prices["gold"].get("sell"):
+        return prices
+
+    # Try Strategy C (with currency markers)
+    for m in _RE_WITH_CURRENCY.finditer(html_normalized):
+        metal = m.group(1).lower()
+        first = m.group(2)
+        second = m.group(3)
+        if first and second:
+            try:
                 prices[metal]["buy"] = prices[metal].get("buy") or _to_float(first)
                 prices[metal]["sell"] = prices[metal].get("sell") or _to_float(second)
+            except (ValueError, AttributeError):
+                pass
 
     # Validate and clean up
     for metal in list(prices.keys()):

@@ -1,6 +1,6 @@
 # Maybank Gold & Silver Prices (Home Assistant)
 
-**Version:** 1.0.1  
+**Version:** 1.0.2  
 **Developer:** Cikgu Saleh
 
 Home Assistant custom integration that provides sensors for Maybank Malaysia Gold and Silver prices (Buy/Sell) scraped from the public rates page.
@@ -42,6 +42,14 @@ All entities are grouped under this device:
 - Check the device page in Home Assistant for diagnostic information.
 
 ## Changelog
+
+### Version 1.0.2 (Parsing Fix - 2025-10-01)
+- 🐛 **FIXED:** Parsing failure - updated regex patterns to match current Maybank HTML structure
+- ✨ Added table-based parsing strategy (Strategy D) for better reliability
+- ✨ Enhanced regex patterns with DOTALL flag for multi-line matching
+- ✨ Improved error logging with HTML context when parsing fails
+- ✨ Added diagnostic attributes to sensors (last_error, last_update_success)
+- ⚡ Increased timeout to 30s for better reliability
 
 ### Version 1.0.1 (Critical Fix - 2025-10-01)
 - 🚨 **CRITICAL:** Fixed Home Assistant freezing/hanging during integration setup
