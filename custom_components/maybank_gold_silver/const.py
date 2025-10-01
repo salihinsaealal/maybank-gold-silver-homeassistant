@@ -11,34 +11,34 @@ USER_AGENT = (
 DEFAULT_SCAN_INTERVAL_MINUTES = 30
 
 SENSOR_TYPES = {
-    # MIGA-i sensors - Use numbers for proper sorting (1=≥100g, 2=<100g)
+    # MIGA-i sensors - numbered prefixes for deterministic ordering (1=100g+, 2=<100g)
     "miga_1_buy_100g_plus": {
-        "name": "Buy (≥100g)",
-        "icon": "mdi:gold",
+        "name": "1. Buy 100g+",
+        "icon": "mdi:hand-coin",
         "metal": "miga_100g",
         "field": "buy",
         "unit": "MYR/g",
         "device": "miga",
     },
     "miga_1_sell_100g_plus": {
-        "name": "Sell (≥100g)",
-        "icon": "mdi:gold",
+        "name": "2. Sell 100g+",
+        "icon": "mdi:hand-coin",
         "metal": "miga_100g",
         "field": "sell",
         "unit": "MYR/g",
         "device": "miga",
     },
     "miga_2_buy_below_100g": {
-        "name": "Buy (<100g)",
-        "icon": "mdi:gold",
+        "name": "3. Buy <100g",
+        "icon": "mdi:hand-coin",
         "metal": "miga_below100g",
         "field": "buy",
         "unit": "MYR/g",
         "device": "miga",
     },
     "miga_2_sell_below_100g": {
-        "name": "Sell (<100g)",
-        "icon": "mdi:gold",
+        "name": "4. Sell <100g",
+        "icon": "mdi:hand-coin",
         "metal": "miga_below100g",
         "field": "sell",
         "unit": "MYR/g",
@@ -47,7 +47,7 @@ SENSOR_TYPES = {
     # Gold sensors (second - regular device)
     "gold_buy": {
         "name": "Gold Buy Price",
-        "icon": "mdi:podium-gold",
+        "icon": "mdi:medal",
         "metal": "gold",
         "field": "buy",
         "unit": "MYR/g",
@@ -55,7 +55,7 @@ SENSOR_TYPES = {
     },
     "gold_sell": {
         "name": "Gold Sell Price",
-        "icon": "mdi:podium-gold",
+        "icon": "mdi:medal",
         "metal": "gold",
         "field": "sell",
         "unit": "MYR/g",
@@ -64,7 +64,7 @@ SENSOR_TYPES = {
     # Silver sensors (third - regular device)
     "silver_buy": {
         "name": "Silver Buy Price",
-        "icon": "mdi:podium-silver",
+        "icon": "mdi:medal-outline",
         "metal": "silver",
         "field": "buy",
         "unit": "MYR/g",
@@ -72,7 +72,7 @@ SENSOR_TYPES = {
     },
     "silver_sell": {
         "name": "Silver Sell Price",
-        "icon": "mdi:podium-silver",
+        "icon": "mdi:medal-outline",
         "metal": "silver",
         "field": "sell",
         "unit": "MYR/g",
