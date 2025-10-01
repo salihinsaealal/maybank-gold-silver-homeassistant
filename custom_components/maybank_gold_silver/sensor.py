@@ -41,7 +41,7 @@ DEVICE_INFO = DeviceInfo(
     manufacturer="Cikgu Saleh",
     model="Gold & Silver Price Feed",
     configuration_url=SOURCE_URL,
-    sw_version="1.0.3",
+    sw_version="1.0.4",
 )
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
@@ -320,6 +320,17 @@ _RE_TWO_DECIMALS = re.compile(
     re.IGNORECASE | re.DOTALL
 )
 
+# MIGA-i patterns
+_RE_MIGA_100G = re.compile(
+    r"For 100 grams and above.*?<td>(\d+\.\d{2})</td><td>(\d+\.\d{2})</td>",
+    re.IGNORECASE | re.DOTALL
+)
+
+_RE_MIGA_BELOW100G = re.compile(
+    r"For below 100 grams.*?<td>(\d+\.\d{2})</td><td>(\d+\.\d{2})</td>",
+    re.IGNORECASE | re.DOTALL
+)
+
 
 def _to_float(val: str) -> float:
     return float(val.replace(",", "").strip())
@@ -334,10 +345,17 @@ def _parse_prices(html: str) -> Dict[str, Dict[str, float]]:
     Returns example structure:
     {
         'gold': {'buy': 534.14, 'sell': 513.79},
-        'silver': {'buy': 6.62, 'sell': 6.10}
+        'silver': {'buy': 6.62, 'sell': 6.10},
+        'miga_100g': {'buy': 534.13, 'sell': 522.06},
+        'miga_below100g': {'buy': 535.88, 'sell': 521.56}
     }
     """
-    prices: Dict[str, Dict[str, float]] = {"gold": {}, "silver": {}}
+    prices: Dict[str, Dict[str, float]] = {
+        "gold": {}, 
+        "silver": {},
+        "miga_100g": {},
+        "miga_below100g": {}
+    }
 
     # Strategy A: Maybank-specific "Investment Account" pattern (most reliable)
     for m in _RE_MAYBANK_INVESTMENT.finditer(html):
@@ -400,9 +418,26 @@ def _parse_prices(html: str) -> Dict[str, Dict[str, float]]:
             except (ValueError, AttributeError):
                 pass
 
-    # Validate and clean up
+    # Parse MIGA-i prices (Islamic Gold Account)
+    match_100g = _RE_MIGA_100G.search(html)
+    if match_100g:
+        try:
+            prices["miga_100g"]["buy"] = _to_float(match_100g.group(1))
+            prices["miga_100g"]["sell"] = _to_float(match_100g.group(2))
+        except (ValueError, AttributeError):
+            pass
+    
+    match_below100g = _RE_MIGA_BELOW100G.search(html)
+    if match_below100g:
+        try:
+            prices["miga_below100g"]["buy"] = _to_float(match_below100g.group(1))
+            prices["miga_below100g"]["sell"] = _to_float(match_below100g.group(2))
+        except (ValueError, AttributeError):
+            pass
+
+    # Validate and clean up - only remove if completely empty
     for metal in list(prices.keys()):
-        if not prices[metal].get("buy") or not prices[metal].get("sell"):
+        if not prices[metal].get("buy") and not prices[metal].get("sell"):
             prices.pop(metal, None)
 
     return prices

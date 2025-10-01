@@ -1,6 +1,6 @@
 # Maybank Gold & Silver (Home Assistant)
 
-**Version:** 1.0.3  
+**Version:** 1.0.4  
 **Developer:** Cikgu Saleh
 
 Home Assistant custom integration that provides Gold and Silver Buy/Sell prices scraped directly from Maybank Malaysia's public rates page:
@@ -32,18 +32,33 @@ https://www.maybank2u.com.my/maybank2u/malaysia/en/personal/rates/gold_and_silve
 The integration creates a single device: **Maybank Gold & Silver Prices**
 
 All entities are grouped under this device for easy management:
+
+**Regular Investment Accounts:**
 - `sensor.gold_buy_price` - Gold buying price (MYR/g)
 - `sensor.gold_sell_price` - Gold selling price (MYR/g)
 - `sensor.silver_buy_price` - Silver buying price (MYR/g)
 - `sensor.silver_sell_price` - Silver selling price (MYR/g)
 
-All values are in MYR per gram. Attributes include the data source URL and last update status.
+**Islamic Gold Account (MIGA-i):**
+- `sensor.miga_i_buy_100g` - MIGA-i buy price for ≥100g (MYR/g)
+- `sensor.miga_i_sell_100g` - MIGA-i sell price for ≥100g (MYR/g)
+- `sensor.miga_i_buy_below100g` - MIGA-i buy price for <100g (MYR/g)
+- `sensor.miga_i_sell_below100g` - MIGA-i sell price for <100g (MYR/g)
+
+**Total: 8 sensors** - All values are in MYR per gram. Attributes include the data source URL and last update status.
 
 ## Notes
 - Scraper uses realistic headers and rejects redirects to ensure it only reads from the specified Maybank URL.
 - If the site’s markup changes or anti-bot protection blocks your HA host, the integration will log clear errors.
 
 ## Changelog
+
+### Version 1.0.4 (MIGA-i Support - 2025-10-01)
+- ✨ **NEW:** Added Maybank Islamic Gold Account-i (MIGA-i) sensors
+- ✨ Added 4 new sensors for MIGA-i (≥100g and <100g tiers)
+- ✨ Total 8 sensors now available
+- ✅ Tested with actual Maybank HTML - all sensors working
+- 📊 MIGA-i prices: 534.13/522.06 (≥100g), 535.88/521.56 (<100g)
 
 ### Version 1.0.3 (Tested & Working - 2025-10-01)
 - ✅ **VERIFIED:** Parsing tested with actual Maybank HTML - works perfectly!
