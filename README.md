@@ -1,6 +1,6 @@
 # Maybank Gold & Silver (Home Assistant)
 
-**Version:** 1.0.2  
+**Version:** 1.0.3  
 **Developer:** Cikgu Saleh
 
 Home Assistant custom integration that provides Gold and Silver Buy/Sell prices scraped directly from Maybank Malaysia's public rates page:
@@ -44,6 +44,14 @@ All values are in MYR per gram. Attributes include the data source URL and last 
 - If the site’s markup changes or anti-bot protection blocks your HA host, the integration will log clear errors.
 
 ## Changelog
+
+### Version 1.0.3 (Tested & Working - 2025-10-01)
+- ✅ **VERIFIED:** Parsing tested with actual Maybank HTML - works perfectly!
+- ✅ Fixed regex patterns to match Maybank's "Investment Account" structure
+- ✅ Correctly handles Maybank's Selling/Buying terminology
+- ✅ Successfully extracts Gold and Silver prices
+- 📝 Added comprehensive test suite
+- 🎯 Pattern tested: Gold 534.14/513.79, Silver 6.62/6.10
 
 ### Version 1.0.2 (Parsing Fix - 2025-10-01)
 - 🐛 **FIXED:** Parsing failure - updated regex patterns to match current Maybank HTML structure
