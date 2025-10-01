@@ -1,6 +1,6 @@
 # Maybank Gold & Silver (Home Assistant)
 
-**Version:** 1.0.4  
+**Version:** 2.0.0  
 **Developer:** Cikgu Saleh
 
 Home Assistant custom integration that provides Gold and Silver Buy/Sell prices scraped directly from Maybank Malaysia's public rates page:
@@ -52,6 +52,15 @@ All entities are grouped under this device for easy management:
 - If the site’s markup changes or anti-bot protection blocks your HA host, the integration will log clear errors.
 
 ## Changelog
+
+### Version 2.0.0 (Major Update - 2025-10-01)
+- 🎉 **MAJOR:** Separated into 2 distinct device cards for better organization
+- 📱 **Device 1:** Maybank Islamic Gold (MIGA-i) - 4 sensors
+- 📱 **Device 2:** Maybank Gold & Silver - 4 sensors
+- 🎨 **NEW ICONS:** Podium gold/silver medals, gold icon for MIGA-i
+- 📊 **SENSOR ORDER:** MIGA-i first, then Gold, then Silver
+- ✨ Cleaner UI with separate cards for Islamic vs regular accounts
+- ✨ More intuitive visual distinction between account types
 
 ### Version 1.0.4 (MIGA-i Support - 2025-10-01)
 - ✨ **NEW:** Added Maybank Islamic Gold Account-i (MIGA-i) sensors

@@ -19,15 +19,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up from a config entry (UI)."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Register the device
+    # Register both devices
     device_registry = dr.async_get(hass)
+    
+    # Device 1: MIGA-i (Islamic Gold Account)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "maybank_miga")},
+        name="Maybank Islamic Gold (MIGA-i)",
+        manufacturer="Cikgu Saleh",
+        model="Islamic Gold Account",
+        sw_version="2.0.0",
+        configuration_url=SOURCE_URL,
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+    
+    # Device 2: Regular Gold & Silver
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "maybank_gold_silver")},
-        name="Maybank Gold & Silver Prices",
+        name="Maybank Gold & Silver",
         manufacturer="Cikgu Saleh",
-        model="Gold & Silver Price Feed",
-        sw_version="1.0.4",
+        model="Investment Account",
+        sw_version="2.0.0",
         configuration_url=SOURCE_URL,
         entry_type=dr.DeviceEntryType.SERVICE,
     )

@@ -11,60 +11,71 @@ USER_AGENT = (
 DEFAULT_SCAN_INTERVAL_MINUTES = 30
 
 SENSOR_TYPES = {
-    "gold_buy": {
-        "name": "Gold Buy Price",
-        "icon": "mdi:gold",
-        "metal": "gold",
-        "field": "buy",
-        "unit": "MYR/g",
-    },
-    "gold_sell": {
-        "name": "Gold Sell Price",
-        "icon": "mdi:gold",
-        "metal": "gold",
-        "field": "sell",
-        "unit": "MYR/g",
-    },
-    "silver_buy": {
-        "name": "Silver Buy Price",
-        "icon": "mdi:silver-coin",
-        "metal": "silver",
-        "field": "buy",
-        "unit": "MYR/g",
-    },
-    "silver_sell": {
-        "name": "Silver Sell Price",
-        "icon": "mdi:silver-coin",
-        "metal": "silver",
-        "field": "sell",
-        "unit": "MYR/g",
-    },
+    # MIGA-i sensors (first - separate device)
     "miga_100g_buy": {
         "name": "MIGA-i Buy (≥100g)",
-        "icon": "mdi:star-crescent",
+        "icon": "mdi:gold",
         "metal": "miga_100g",
         "field": "buy",
         "unit": "MYR/g",
+        "device": "miga",
     },
     "miga_100g_sell": {
         "name": "MIGA-i Sell (≥100g)",
-        "icon": "mdi:star-crescent",
+        "icon": "mdi:gold",
         "metal": "miga_100g",
         "field": "sell",
         "unit": "MYR/g",
+        "device": "miga",
     },
     "miga_below100g_buy": {
         "name": "MIGA-i Buy (<100g)",
-        "icon": "mdi:star-crescent",
+        "icon": "mdi:gold",
         "metal": "miga_below100g",
         "field": "buy",
         "unit": "MYR/g",
+        "device": "miga",
     },
     "miga_below100g_sell": {
         "name": "MIGA-i Sell (<100g)",
-        "icon": "mdi:star-crescent",
+        "icon": "mdi:gold",
         "metal": "miga_below100g",
         "field": "sell",
         "unit": "MYR/g",
+        "device": "miga",
+    },
+    # Gold sensors (second - regular device)
+    "gold_buy": {
+        "name": "Gold Buy Price",
+        "icon": "mdi:podium-gold",
+        "metal": "gold",
+        "field": "buy",
+        "unit": "MYR/g",
+        "device": "regular",
+    },
+    "gold_sell": {
+        "name": "Gold Sell Price",
+        "icon": "mdi:podium-gold",
+        "metal": "gold",
+        "field": "sell",
+        "unit": "MYR/g",
+        "device": "regular",
+    },
+    # Silver sensors (third - regular device)
+    "silver_buy": {
+        "name": "Silver Buy Price",
+        "icon": "mdi:podium-silver",
+        "metal": "silver",
+        "field": "buy",
+        "unit": "MYR/g",
+        "device": "regular",
+    },
+    "silver_sell": {
+        "name": "Silver Sell Price",
+        "icon": "mdi:podium-silver",
+        "metal": "silver",
+        "field": "sell",
+        "unit": "MYR/g",
+        "device": "regular",
     },
 }

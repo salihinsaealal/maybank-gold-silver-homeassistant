@@ -34,14 +34,24 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Shared device info to avoid recreating for each entity
-DEVICE_INFO = DeviceInfo(
+# Shared device info for regular gold/silver
+DEVICE_INFO_REGULAR = DeviceInfo(
     identifiers={(DOMAIN, "maybank_gold_silver")},
-    name="Maybank Gold & Silver Prices",
+    name="Maybank Gold & Silver",
     manufacturer="Cikgu Saleh",
-    model="Gold & Silver Price Feed",
+    model="Investment Account",
     configuration_url=SOURCE_URL,
-    sw_version="1.0.4",
+    sw_version="2.0.0",
+)
+
+# Shared device info for MIGA-i (Islamic)
+DEVICE_INFO_MIGA = DeviceInfo(
+    identifiers={(DOMAIN, "maybank_miga")},
+    name="Maybank Islamic Gold (MIGA-i)",
+    manufacturer="Cikgu Saleh",
+    model="Islamic Gold Account",
+    configuration_url=SOURCE_URL,
+    sw_version="2.0.0",
 )
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
@@ -253,7 +263,14 @@ class MaybankMetalPriceSensor(CoordinatorEntity[MaybankMetalsCoordinator], Senso
         self._attr_native_unit_of_measurement = desc.get("unit", "MYR/g")
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = f"{DOMAIN}_{self._metal}_{self._field}"
-        self._attr_device_info = DEVICE_INFO
+        
+        # Assign device based on sensor type
+        device_type = desc.get("device", "regular")
+        if device_type == "miga":
+            self._attr_device_info = DEVICE_INFO_MIGA
+        else:
+            self._attr_device_info = DEVICE_INFO_REGULAR
+            
         self._attr_suggested_display_precision = 2
 
     @property
